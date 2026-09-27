@@ -1,0 +1,76 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --navy-950: #071726;
+  --navy-900: #0A1E33;
+  --navy-850: #0C2540;
+  --navy-800: #0E2A45;
+  --navy-700: #123A5E;
+  --navy-600: #1B4E77;
+  --teal: #1FA6C9;
+  --teal-bright: #3FC9E9;
+  --green: #3AA655;
+  --green-bright: #5BCB80;
+  --amber: #E7A13A;
+  --red: #E0574B;
+  --paper: #EDF2F7;
+  --paper-2: #FFFFFF;
+  --paper-3: #F6F9FC;
+  --ink: #0B1E30;
+  --ink-2: #20364A;
+  --slate: #5D6E7E;
+  --slate-2: #8598A8;
+  --line-d: rgba(255, 255, 255, 0.10);
+  --line-d2: rgba(255, 255, 255, 0.16);
+  --line-l: rgba(11, 42, 74, 0.12);
+  --cloud: #D7E2EC;
+  --f-d: 'Archivo', system-ui, sans-serif;
+  --f-b: 'IBM Plex Sans', system-ui, sans-serif;
+  --f-m: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+body {
+  font-family: var(--f-b);
+  color: #eaf3f8;
+  background:
+    radial-gradient(1200px 700px at 80% -10%, rgba(31, 166, 201, 0.16), transparent 60%),
+    radial-gradient(900px 600px at 0% 110%, rgba(58, 166, 85, 0.10), transparent 55%),
+    linear-gradient(180deg, var(--navy-900), var(--navy-950));
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  font-size: 15px;
+}
+
+.font-display {
+  font-family: var(--f-d);
+}
+
+.font-mono-code {
+  font-family: var(--f-m);
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(58, 166, 85, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(58, 166, 85, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(58, 166, 85, 0);
+  }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2.2s infinite;
+}
+
+/* Hide scrollbars in phone screen while keeping smooth scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

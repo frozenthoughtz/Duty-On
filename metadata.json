@@ -1,0 +1,6 @@
+{
+  "name": "Duty On Demo",
+  "description": "Duty On interactive demo - Officer mobile field app, Control Room live operations management, and Security Roster Maker with automated 4x4 monthly rotation and PSIRA compliance.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

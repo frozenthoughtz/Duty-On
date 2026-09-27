@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default safety deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User authentication & profile records
+    match /users/{userId} {
+      allow read, write: if true;
+      
+      match /profiles/{profileId} {
+        allow read, write: if true;
+      }
+    }
+
+    // DutyOn Real-time Operational Records (Field Patrols & Control Room)
+    match /ob_entries/{entryId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /patrol_scans/{scanId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /patrol_exceptions/{exceptionId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /incidents/{incidentId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /alerts/{alertId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /chat_messages/{messageId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /fleet_vehicles/{vehicleId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /sites/{siteId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /officers/{officerId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /sefeko_devices/{deviceId} {
+      allow read, write: if true;
+    }
+
+    match /timesheets/{timesheetId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /officer_documents/{docId} {
+      allow read, create, update, delete: if true;
+    }
+
+    match /rosters/{rosterId} {
+      allow read, write: if true;
+    }
+
+    match /test/{testId} {
+      allow read, write: if true;
+    }
+  }
+}
+

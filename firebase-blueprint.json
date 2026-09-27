@@ -1,0 +1,238 @@
+{
+  "entities": {
+    "OBEntry": {
+      "title": "OBEntry",
+      "description": "Occurrence Book entry logged by security officers or control room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "time": { "type": "string", "maxLength": 32 },
+        "headline": { "type": "string", "maxLength": 256 },
+        "notes": { "type": "string", "maxLength": 2048 },
+        "status": { "type": "string", "enum": ["completed", "in_progress", "pending"] },
+        "site": { "type": "string", "maxLength": 128 },
+        "hasPhoto": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "time", "headline", "status"]
+    },
+    "PatrolScan": {
+      "title": "PatrolScan",
+      "description": "Verification of a patrol checkpoint bump or scan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "routeId": { "type": "string", "maxLength": 64 },
+        "checkpointId": { "type": "number" },
+        "checkpointName": { "type": "string", "maxLength": 128 },
+        "scannedAt": { "type": "string", "maxLength": 32 },
+        "scannedBy": { "type": "string", "maxLength": 128 },
+        "tagUid": { "type": "string", "maxLength": 64 },
+        "tagType": { "type": "string", "maxLength": 64 },
+        "method": { "type": "string", "maxLength": 64 },
+        "dwellTimeSec": { "type": "number" },
+        "inspectionNotes": { "type": "string", "maxLength": 1024 },
+        "photoUrl": { "type": "string", "maxLength": 4096 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "routeId", "checkpointId", "checkpointName", "scannedAt"]
+    },
+    "PatrolException": {
+      "title": "PatrolException",
+      "description": "Security incident, damaged lock, fence breach, or exception reported on patrol",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "routeId": { "type": "string", "maxLength": 64 },
+        "siteName": { "type": "string", "maxLength": 128 },
+        "checkpointName": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 128 },
+        "severity": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"] },
+        "description": { "type": "string", "maxLength": 2048 },
+        "timestamp": { "type": "string", "maxLength": 32 },
+        "officerName": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "maxLength": 64 },
+        "actionTaken": { "type": "string", "maxLength": 1024 },
+        "photoUrl": { "type": "string", "maxLength": 4096 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "category", "severity", "description", "timestamp"]
+    },
+    "IncidentQueueItem": {
+      "title": "IncidentQueueItem",
+      "description": "Live dispatch incident queue item managed by the Control Room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "priority": { "type": "string", "maxLength": 32 },
+        "category": { "type": "string", "maxLength": 128 },
+        "site": { "type": "string", "maxLength": 128 },
+        "age": { "type": "string", "maxLength": 32 },
+        "operator": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["open", "investigating", "resolved"] },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "priority", "category", "site", "status"]
+    },
+    "ControlRoomAlert": {
+      "title": "ControlRoomAlert",
+      "description": "High-priority broadcast alert for security dispatchers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "location": { "type": "string", "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 2048 },
+        "time": { "type": "string", "maxLength": 32 },
+        "priority": { "type": "string", "maxLength": 32 },
+        "type": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "location", "time", "priority"]
+    },
+    "FleetVehicle": {
+      "title": "FleetVehicle",
+      "description": "Armed response and tactical patrol vehicles tracked by SOC control room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "callSign": { "type": "string", "maxLength": 64 },
+        "vehicleModel": { "type": "string", "maxLength": 128 },
+        "regPlate": { "type": "string", "maxLength": 64 },
+        "crew": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "maxLength": 64 },
+        "sector": { "type": "string", "maxLength": 128 },
+        "radioChannel": { "type": "string", "maxLength": 64 },
+        "speedKmH": { "type": "number" },
+        "batteryPct": { "type": "number" },
+        "fuelPct": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "callSign", "regPlate", "status"]
+    },
+    "SiteRecord": {
+      "title": "SiteRecord",
+      "description": "Protected client sites, perimeters, and geofence coordinates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "location": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 64 },
+        "officersRequired": { "type": "number" },
+        "officersPresent": { "type": "number" },
+        "geofenceRadius": { "type": "number" },
+        "status": { "type": "string", "maxLength": 64 },
+        "clientContactName": { "type": "string", "maxLength": 128 },
+        "clientPhone": { "type": "string", "maxLength": 64 },
+        "sapsStation": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "location", "status"]
+    },
+    "OfficerRecord": {
+      "title": "OfficerRecord",
+      "description": "Security officer personnel, PSIRA registry, and post assignment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "empId": { "type": "string", "maxLength": 64 },
+        "psiraNumber": { "type": "string", "maxLength": 64 },
+        "grade": { "type": "string", "maxLength": 64 },
+        "phone": { "type": "string", "maxLength": 64 },
+        "currentSite": { "type": "string", "maxLength": 128 },
+        "currentPost": { "type": "string", "maxLength": 128 },
+        "isClockedIn": { "type": "boolean" },
+        "firearmCompetency": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "empId", "psiraNumber"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User security credentials, role, linked officer record, and access permissions",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["officer", "operator", "admin"] },
+        "officerId": { "type": "string", "maxLength": 128 },
+        "empId": { "type": "string", "maxLength": 64 },
+        "psiraNumber": { "type": "string", "maxLength": 64 },
+        "controlRoomAccess": { "type": "boolean" },
+        "adminAccess": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "role"]
+    },
+    "OfficerDocument": {
+      "title": "OfficerDocument",
+      "description": "Officer training certificate, ID, PSIRA, or compliance document captured via camera or uploaded",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 512 },
+        "type": { "type": "string", "maxLength": 32 },
+        "iconType": { "type": "string", "enum": ["contract", "psira", "id", "payslip", "warning", "policy"] },
+        "officerId": { "type": "string", "maxLength": 128 },
+        "officerName": { "type": "string", "maxLength": 128 },
+        "certificateNumber": { "type": "string", "maxLength": 128 },
+        "issuingAuthority": { "type": "string", "maxLength": 128 },
+        "expiryDate": { "type": "string", "maxLength": 32 },
+        "expiresSoon": { "type": "boolean" },
+        "photoUrl": { "type": "string", "maxLength": 500000 },
+        "fileData": { "type": "string", "maxLength": 500000 },
+        "capturedAt": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "source": { "type": "string", "enum": ["camera", "upload", "system"] }
+      },
+      "required": ["id", "name", "category"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile with role-based access control and officer link"
+    },
+    "/ob_entries/{entryId}": {
+      "schema": "OBEntry",
+      "description": "Real-time Occurrence Book logs"
+    },
+    "/patrol_scans/{scanId}": {
+      "schema": "PatrolScan",
+      "description": "Live checkpoint verification events"
+    },
+    "/patrol_exceptions/{exceptionId}": {
+      "schema": "PatrolException",
+      "description": "Reported perimeter breaches and patrol exceptions"
+    },
+    "/incidents/{incidentId}": {
+      "schema": "IncidentQueueItem",
+      "description": "Control room active dispatch incident queue"
+    },
+    "/alerts/{alertId}": {
+      "schema": "ControlRoomAlert",
+      "description": "Broadcast emergency alerts and duress warnings"
+    },
+    "/fleet_vehicles/{vehicleId}": {
+      "schema": "FleetVehicle",
+      "description": "Fleet and tactical response vehicles"
+    },
+    "/sites/{siteId}": {
+      "schema": "SiteRecord",
+      "description": "Protected physical sites and geofenced perimeters"
+    },
+    "/officers/{officerId}": {
+      "schema": "OfficerRecord",
+      "description": "Enrolled security personnel roster"
+    },
+    "/officer_documents/{docId}": {
+      "schema": "OfficerDocument",
+      "description": "Officer captured training certificates, IDs, and compliance docs"
+    }
+  }
+}
