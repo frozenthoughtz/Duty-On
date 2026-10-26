@@ -10,8 +10,12 @@ import {
   exportToXeroTimesheetCSV,
   exportDetailedAuditCSV,
   SECTORAL_RULES,
+  getRateForRegionAndGrade
 } from '../utils/payrollSectoral';
 import { TimesheetEntry, OfficerPayrollSummary } from '../types/dutyon';
+import { SectoralRatesConfigModal } from './modals/SectoralRatesConfigModal';
+import { EditTimesheetRateModal } from './modals/EditTimesheetRateModal';
+import { DecimalRateInput } from './common/DecimalRateInput';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -37,8 +41,16 @@ export const PayrollTimesheetView: React.FC = () => {
     sites, 
     showToast,
     doClockIn,
-    officer 
+    officer,
+    regionalRates,
+    updateRegionalRates,
+    updateTimesheetEntry
   } = useDutyOn();
+
+  // Regional Rates Modal & Edit Rate Modal states
+  const [isSectoralRatesModalOpen, setIsSectoralRatesModalOpen] = useState(false);
+  const [editingTimesheetForRate, setEditingTimesheetForRate] = useState<TimesheetEntry | null>(null);
+  const [selectedRegionFilter, setSelectedRegionFilter] = useState<'ALL' | 'region_1' | 'region_2'>('ALL');
 
   // Quick record shift modal state
   const [isRecordShiftModalOpen, setIsRecordShiftModalOpen] = useState(false);
@@ -49,6 +61,65 @@ export const PayrollTimesheetView: React.FC = () => {
   const [shiftDateInput, setShiftDateInput] = useState<string>(new Date().toISOString().slice(0, 10));
   const [isSundayShift, setIsSundayShift] = useState(false);
   const [isHolidayShift, setIsHolidayShift] = useState(false);
+
+  // Quick record shift: Manual Rates & Benefits states
+  const [shiftRegionId, setShiftRegionId] = useState<'region_1' | 'region_2'>('region_1');
+  const [shiftBasicRate, setShiftBasicRate] = useState<number>(36.50);
+  const [shiftBenefitsRate, setShiftBenefitsRate] = useState<number>(7.00);
+  const [shiftTotalRateInclBenefits, setShiftTotalRateInclBenefits] = useState<number>(43.50);
+  const [shiftClientBillingRate, setShiftClientBillingRate] = useState<number>(80.00);
+
+  // Auto-sync rates when officer or site changes in Record Shift Modal
+  React.useEffect(() => {
+    const selectedOff = officersList.find((o) => o.id === selectedShiftOfficerId);
+    const selectedSite = sites.find((s) => s.name === shiftSiteName);
+    const effectiveReg = (selectedOff?.regionId || selectedSite?.regionId || 'region_1') as 'region_1' | 'region_2';
+    setShiftRegionId(effectiveReg);
+
+    const rateConfig = getRateForRegionAndGrade(regionalRates, effectiveReg, selectedOff?.grade);
+    const base = Number(selectedOff?.hourlyRate) || rateConfig.basicHourlyRate;
+    const ben = Number(selectedOff?.benefitsHourlyRate) || rateConfig.benefitsHourlyRate;
+    const tot = Number(selectedOff?.totalRateInclBenefits) || (base + ben);
+    const bill = Number(selectedOff?.clientBillingRate) || rateConfig.clientBillingRate;
+
+    setShiftBasicRate(base);
+    setShiftBenefitsRate(ben);
+    setShiftTotalRateInclBenefits(tot);
+    setShiftClientBillingRate(bill);
+  }, [selectedShiftOfficerId, shiftSiteName, regionalRates]);
+
+  const handleShiftRegionChange = (newReg: 'region_1' | 'region_2') => {
+    setShiftRegionId(newReg);
+    const selectedOff = officersList.find((o) => o.id === selectedShiftOfficerId);
+    const rateConfig = getRateForRegionAndGrade(regionalRates, newReg, selectedOff?.grade);
+    setShiftBasicRate(rateConfig.basicHourlyRate);
+    setShiftBenefitsRate(rateConfig.benefitsHourlyRate);
+    setShiftTotalRateInclBenefits(rateConfig.totalRateInclBenefits);
+    setShiftClientBillingRate(rateConfig.clientBillingRate);
+  };
+
+  const handleShiftTotalRateChange = (newTot: number) => {
+    const rounded = Math.round(newTot * 100) / 100;
+    setShiftTotalRateInclBenefits(rounded);
+    if (rounded >= shiftBasicRate) {
+      setShiftBenefitsRate(Math.round((rounded - shiftBasicRate) * 100) / 100);
+    } else {
+      setShiftBasicRate(rounded);
+      setShiftBenefitsRate(0);
+    }
+  };
+
+  const handleShiftBasicRateChange = (newBase: number) => {
+    const rounded = Math.round(newBase * 100) / 100;
+    setShiftBasicRate(rounded);
+    setShiftTotalRateInclBenefits(Math.round((rounded + shiftBenefitsRate) * 100) / 100);
+  };
+
+  const handleShiftBenefitsRateChange = (newBen: number) => {
+    const rounded = Math.round(newBen * 100) / 100;
+    setShiftBenefitsRate(rounded);
+    setShiftTotalRateInclBenefits(Math.round((shiftBasicRate + rounded) * 100) / 100);
+  };
 
   // Timeline / Active Cycle Date Range Filtering
   const [startDate, setStartDate] = useState<string>('2026-09-01');
@@ -81,14 +152,18 @@ export const PayrollTimesheetView: React.FC = () => {
     }
   };
 
-  // Filter master timesheets by active timeline date range
+  // Filter master timesheets by active timeline date range & region
   const timesheetsInCycle = useMemo(() => {
     return timesheets.filter((ts) => {
       if (startDate && ts.date < startDate) return false;
       if (endDate && ts.date > endDate) return false;
+      if (selectedRegionFilter !== 'ALL') {
+        const reg = ts.regionId || 'region_1';
+        if (reg !== selectedRegionFilter) return false;
+      }
       return true;
     });
-  }, [timesheets, startDate, endDate]);
+  }, [timesheets, startDate, endDate, selectedRegionFilter]);
 
   const officerSummaries = useMemo(
     () => calculateOfficerPayrollSummaries(timesheetsInCycle),
@@ -299,6 +374,15 @@ export const PayrollTimesheetView: React.FC = () => {
             </button>
 
             <button
+              onClick={() => setIsSectoralRatesModalOpen(true)}
+              className="px-3.5 py-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 font-display font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Configure Sectoral Determination Regional & Grade Wage Rates"
+            >
+              <span>⚖️</span>
+              <span>Sectoral Rates (Reg 1 &amp; 2)</span>
+            </button>
+
+            <button
               onClick={() => {
                 if (window.confirm('Reset all sectoral timesheets to zero baseline? Live hours will recount from 0.')) {
                   clearAllTimesheets();
@@ -480,7 +564,7 @@ export const PayrollTimesheetView: React.FC = () => {
             {payPeriodSummary.totalNightShifts} <span className="text-xs font-normal text-[#8598A8]">shifts</span>
           </div>
           <div className="text-[11px] text-[#8598A8] mt-1 font-mono-code text-indigo-300">
-            R{(payPeriodSummary.totalNightShifts * SECTORAL_RULES.nightShiftAllowancePerShift).toLocaleString()} allowance pool
+            R{(payPeriodSummary.totalNightShifts * SECTORAL_RULES.nightShiftAllowancePerShift).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} allowance pool
           </div>
         </div>
 
@@ -496,7 +580,7 @@ export const PayrollTimesheetView: React.FC = () => {
             {(payPeriodSummary.totalSundayHours + payPeriodSummary.totalHolidayHours).toFixed(1)} <span className="text-xs font-normal text-[#8598A8]">hrs</span>
           </div>
           <div className="text-[11px] text-[#8598A8] mt-1">
-            Sun: {payPeriodSummary.totalSundayHours.toFixed(0)}h · Africa Day: {payPeriodSummary.totalHolidayHours.toFixed(0)}h
+            Sun: {payPeriodSummary.totalSundayHours.toFixed(1)}h · Africa Day: {payPeriodSummary.totalHolidayHours.toFixed(1)}h
           </div>
         </div>
 
@@ -512,7 +596,7 @@ export const PayrollTimesheetView: React.FC = () => {
             {payPeriodSummary.grossMarginPercent}%
           </div>
           <div className="text-[11px] text-[#8598A8] mt-1">
-            Billed: <strong className="text-white">R{payPeriodSummary.totalBilledToClients.toLocaleString()}</strong> · Wage: R{payPeriodSummary.totalGrossWages.toLocaleString()}
+            Billed: <strong className="text-white">R{payPeriodSummary.totalBilledToClients.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> · Wage: R{payPeriodSummary.totalGrossWages.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
       </div>
@@ -857,6 +941,7 @@ export const PayrollTimesheetView: React.FC = () => {
                   <th className="py-3 px-4 text-center">Clock-In / Out</th>
                   <th className="py-3 px-4 text-center">Standard</th>
                   <th className="py-3 px-4 text-center">Billable</th>
+                  <th className="py-3 px-4 text-center">Rate &amp; Benefits (R/hr)</th>
                   <th className="py-3 px-4">Sectoral Allowances</th>
                   <th className="py-3 px-4 text-right">Wage Cost / Client Rev</th>
                 </tr>
@@ -934,6 +1019,35 @@ export const PayrollTimesheetView: React.FC = () => {
                         )}
                       </td>
 
+                      <td className="py-3 px-4 text-center font-mono-code" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-emerald-300 font-bold text-xs">
+                              R{(ts.totalRateInclBenefits ?? (ts.hourlyRate + (ts.benefitsHourlyRate || 0))).toFixed(2)}/hr
+                            </span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                              (ts.regionId || 'region_1') === 'region_2'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-[#1FA6C9]/20 text-[#3FC9E9] border border-[#1FA6C9]/30'
+                            }`}>
+                              {(ts.regionId || 'region_1') === 'region_2' ? 'Reg 2' : 'Reg 1'}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-[#8598A8]">
+                            Base R{ts.hourlyRate.toFixed(2)} + Ben R{(ts.benefitsHourlyRate || 0).toFixed(2)}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setEditingTimesheetForRate(ts)}
+                            className="mt-0.5 px-2 py-0.5 rounded-lg bg-white/10 hover:bg-emerald-500/20 hover:text-emerald-300 text-[10px] text-white border border-white/10 transition-colors cursor-pointer flex items-center gap-1"
+                            title="Edit rate per hour including benefits for this shift"
+                          >
+                            <span>✏️</span>
+                            <span>Edit Rate</span>
+                          </button>
+                        </div>
+                      </td>
+
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {ts.isNightAllowanceEligible && (
@@ -959,10 +1073,10 @@ export const PayrollTimesheetView: React.FC = () => {
 
                       <td className="py-3 px-4 text-right">
                         <div className="font-mono-code text-white font-semibold">
-                          R{clientRev.toFixed(0)} billed
+                          R{clientRev.toFixed(2)} billed
                         </div>
                         <div className="font-mono-code text-[11px] text-[#8598A8]">
-                          Wage: R{wageCost.toFixed(0)}
+                          Wage: R{wageCost.toFixed(2)}
                         </div>
                       </td>
                     </tr>
@@ -1296,11 +1410,11 @@ export const PayrollTimesheetView: React.FC = () => {
                     </td>
 
                     <td className="py-3 px-4 text-right font-mono-code font-semibold text-white">
-                      R{s.grossWages.toLocaleString()}
+                      R{s.grossWages.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
 
                     <td className="py-3 px-4 text-right font-mono-code font-semibold text-[#3FC9E9]">
-                      R{s.clientBilledAmount.toLocaleString()}
+                      R{s.clientBilledAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
 
                     <td className="py-3 px-4 text-right">
@@ -1308,7 +1422,7 @@ export const PayrollTimesheetView: React.FC = () => {
                         {s.profitMarginPercent}%
                       </span>
                       <div className="text-[10px] text-[#8598A8] font-mono-code">
-                        +R{s.profitMarginAmount.toLocaleString()}
+                        +R{s.profitMarginAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                     </td>
 
@@ -1584,6 +1698,31 @@ export const PayrollTimesheetView: React.FC = () => {
               </div>
             </div>
 
+            <div className="bg-[#071726] p-3 rounded-xl border border-white/10 text-xs">
+              <div className="flex items-center justify-between text-[#8598A8] mb-1.5 font-semibold uppercase text-[10px]">
+                <span>Wage &amp; Billing Rates Breakdown</span>
+                <span className="text-emerald-400 font-bold font-mono-code">
+                  {(selectedEntry.regionId || 'region_1') === 'region_2' ? 'Region 2 (Area 2)' : 'Region 1 (Area 1)'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 font-mono-code">
+                <div>
+                  <span className="text-[10px] text-[#8598A8]">Basic Rate:</span>
+                  <div className="text-white font-bold">R{selectedEntry.hourlyRate.toFixed(2)}/hr</div>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#8598A8]">Benefits Rate:</span>
+                  <div className="text-emerald-400 font-bold">R{(selectedEntry.benefitsHourlyRate || 0).toFixed(2)}/hr</div>
+                </div>
+                <div>
+                  <span className="text-[10px] text-emerald-300 font-bold">Rate Incl. Ben:</span>
+                  <div className="text-emerald-300 font-extrabold">
+                    R{(selectedEntry.totalRateInclBenefits ?? (selectedEntry.hourlyRate + (selectedEntry.benefitsHourlyRate || 0))).toFixed(2)}/hr
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {selectedEntry.varianceReason && (
               <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-xs text-amber-200">
                 <strong className="block text-amber-300 font-semibold mb-0.5">Supervisor Handover Note:</strong>
@@ -1591,7 +1730,20 @@ export const PayrollTimesheetView: React.FC = () => {
               </div>
             )}
 
-            <div className="pt-2 flex justify-end gap-2">
+            <div className="pt-2 flex justify-between gap-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  const entryToEdit = selectedEntry;
+                  setSelectedEntry(null);
+                  setEditingTimesheetForRate(entryToEdit);
+                }}
+                className="px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 font-display font-semibold text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
+              >
+                <span>✏️</span>
+                <span>Edit Wage &amp; Benefit Rates</span>
+              </button>
+
               <button
                 onClick={() => {
                   showToast(`Timesheet entry ${selectedEntry.id} marked as locked & verified`);
@@ -1636,11 +1788,16 @@ export const PayrollTimesheetView: React.FC = () => {
                   standardHours: shiftHoursCount,
                   overtimeHours: 0,
                   isSunday: isSundayShift,
-                  isPublicHoliday: isHolidayShift
+                  isPublicHoliday: isHolidayShift,
+                  regionId: shiftRegionId,
+                  hourlyRate: shiftBasicRate,
+                  benefitsHourlyRate: shiftBenefitsRate,
+                  totalRateInclBenefits: shiftTotalRateInclBenefits,
+                  clientBillingRate: shiftClientBillingRate
                 });
                 setIsRecordShiftModalOpen(false);
               }}
-              className="space-y-3.5 text-xs"
+              className="space-y-3 text-xs"
             >
               <div>
                 <label className="block text-[#8598A8] mb-1 font-semibold">Security Officer</label>
@@ -1655,6 +1812,82 @@ export const PayrollTimesheetView: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Regional Determination Region Selector */}
+              <div className="bg-[#071726] p-2.5 rounded-xl border border-white/10">
+                <label className="block text-[#3FC9E9] mb-1.5 font-bold uppercase text-[10px]">
+                  Sectoral Determination Region
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleShiftRegionChange('region_1')}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      shiftRegionId === 'region_1'
+                        ? 'bg-[#1FA6C9] text-[#042430] shadow-sm'
+                        : 'bg-white/5 text-[#8598A8] hover:text-white'
+                    }`}
+                  >
+                    Region 1 (Area 1 Metro)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleShiftRegionChange('region_2')}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      shiftRegionId === 'region_2'
+                        ? 'bg-emerald-500 text-[#042430] shadow-sm'
+                        : 'bg-white/5 text-[#8598A8] hover:text-white'
+                    }`}
+                  >
+                    Region 2 (Area 2 Non-Metro)
+                  </button>
+                </div>
+              </div>
+
+              {/* Manual Hourly Rates & Benefits with Cents */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[10.5px]">
+                  <span className="font-bold text-white uppercase">Manual Shift Wage &amp; Benefit Rates</span>
+                  <span className="text-[#8598A8]">Cents allowed (e.g. 43.50)</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 bg-[#071726] p-2.5 rounded-xl border border-white/10">
+                  <div>
+                    <label className="block text-[#8598A8] mb-1 text-[10px] font-semibold uppercase">
+                      Basic Rate (R/hr)
+                    </label>
+                    <DecimalRateInput
+                      value={shiftBasicRate}
+                      onChange={handleShiftBasicRateChange}
+                      className="border-b border-white/20 pb-0.5 font-bold"
+                      inputClassName="text-xs font-bold text-white focus:text-[#3FC9E9]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[#8598A8] mb-1 text-[10px] font-semibold uppercase">
+                      Benefits (R/hr)
+                    </label>
+                    <DecimalRateInput
+                      value={shiftBenefitsRate}
+                      onChange={handleShiftBenefitsRateChange}
+                      className="border-b border-white/20 pb-0.5 font-bold"
+                      inputClassName="text-xs font-bold text-emerald-400 focus:text-emerald-300"
+                    />
+                  </div>
+
+                  <div className="bg-emerald-950/40 p-1.5 rounded-lg border border-emerald-500/40">
+                    <label className="block text-emerald-300 mb-1 text-[10px] font-bold uppercase">
+                      Rate Incl. Benefits ★
+                    </label>
+                    <DecimalRateInput
+                      value={shiftTotalRateInclBenefits}
+                      onChange={handleShiftTotalRateChange}
+                      className="border-b border-emerald-400/40 pb-0.5 font-bold"
+                      inputClassName="text-xs font-extrabold text-emerald-300 focus:text-white"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1703,7 +1936,7 @@ export const PayrollTimesheetView: React.FC = () => {
                     type="number"
                     min="1"
                     max="24"
-                    step="0.5"
+                    step="0.25"
                     value={shiftHoursCount}
                     onChange={(e) => setShiftHoursCount(parseFloat(e.target.value) || 12)}
                     className="w-full bg-[#071726] border border-white/15 rounded-xl p-2.5 text-white font-mono-code focus:outline-none focus:border-[#1FA6C9]"
@@ -1751,6 +1984,27 @@ export const PayrollTimesheetView: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* SECTORAL REGIONAL & GRADE WAGE RATES CONFIG MODAL */}
+      <SectoralRatesConfigModal
+        isOpen={isSectoralRatesModalOpen}
+        onClose={() => setIsSectoralRatesModalOpen(false)}
+      />
+
+      {/* EDIT INDIVIDUAL SHIFT RATE & BENEFITS MODAL */}
+      {editingTimesheetForRate && (
+        <EditTimesheetRateModal
+          isOpen={Boolean(editingTimesheetForRate)}
+          entry={editingTimesheetForRate}
+          regionalRates={regionalRates}
+          onClose={() => setEditingTimesheetForRate(null)}
+          onSave={async (id, updates) => {
+            await updateTimesheetEntry(id, updates);
+            setEditingTimesheetForRate(null);
+            showToast('✓ Shift rate per hour and benefits updated');
+          }}
+        />
       )}
     </div>
   );

@@ -28,10 +28,17 @@ import {
   FleetVehicle,
   UserRole,
   UserAuthProfile,
-  TimesheetEntry
+  TimesheetEntry,
+  SectoralRatesMatrix
 } from '../types/dutyon';
 import { patrolAudio } from '../utils/patrolAudio';
-import { generatePayPeriodTimesheets, GRADE_RATES, SECTORAL_RULES } from '../utils/payrollSectoral';
+import { 
+  generatePayPeriodTimesheets, 
+  GRADE_RATES, 
+  SECTORAL_RULES,
+  DEFAULT_SECTORAL_RATES_MATRIX,
+  getRateForRegionAndGrade
+} from '../utils/payrollSectoral';
 import { auth, onAuthStateChanged, signOut, type User } from '../firebase';
 import {
   testFirestoreConnection,
@@ -75,7 +82,9 @@ import {
   type CloudPatrolScan,
   deletePatrolScanInCloud,
   clearAllPatrolScansInCloud,
-  clearAllPatrolExceptionsInCloud
+  clearAllPatrolExceptionsInCloud,
+  syncRegionalRatesToCloud,
+  subscribeToRegionalRates
 } from '../services/firestoreDutyOn';
 import { TIKEDI_SITES, TIKEDI_OFFICERS, INITIAL_TIKEDI_ROSTER_ROWS } from '../data/tikediMasterData';
 
@@ -295,7 +304,10 @@ interface DutyOnContextType {
   deleteIncidentEvidence: (incidentId: string, evidenceId: string) => void;
   broadcastControlRoomAlert: (title: string, message: string, targetSite: string, priority?: 'CRITICAL' | 'HIGH' | 'MED') => void;
 
-  // Timesheets & Hours
+  // Timesheets, Regional Rates & Sectoral Determination
+  regionalRates: SectoralRatesMatrix;
+  updateRegionalRates: (newMatrix: SectoralRatesMatrix) => Promise<void>;
+  updateTimesheetEntry: (id: string, updates: Partial<TimesheetEntry>) => Promise<void>;
   timesheets: TimesheetEntry[];
   addTimesheet: (entry: TimesheetEntry) => void;
   deleteTimesheet: (id: string) => void;
@@ -309,6 +321,11 @@ interface DutyOnContextType {
     overtimeHours?: number;
     isSunday?: boolean;
     isPublicHoliday?: boolean;
+    regionId?: 'region_1' | 'region_2' | string;
+    hourlyRate?: number;
+    benefitsHourlyRate?: number;
+    totalRateInclBenefits?: number;
+    clientBillingRate?: number;
   }) => void;
   resetToRealLifeData: () => Promise<void>;
   deletePatrolException: (id: string) => void;
@@ -441,6 +458,20 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Sectoral Timesheets & Real-life Hours (starts at clean ZERO baseline)
   const [timesheets, setTimesheets] = useState<TimesheetEntry[]>([]);
+
+  // Sectoral Determination Regional Wage Rates & Statutory Benefits Matrix
+  const [regionalRates, setRegionalRates] = useState<SectoralRatesMatrix>(() => {
+    try {
+      const saved = localStorage.getItem('dutyon_regional_rates');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.region1 && parsed.region2) return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse cached regional rates', e);
+    }
+    return DEFAULT_SECTORAL_RATES_MATRIX;
+  });
 
   // Radar & User Real GPS Location
   const [userLocation, setUserLocation] = useState<{
@@ -713,6 +744,16 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
     const dayName = daysOfWeek[now.getDay()];
 
+    const offSite = sites.find((s) => s.name === officer.currentSite);
+    const effectiveRegionId = activeOfficerRecord?.regionId || offSite?.regionId || 'region_1';
+    const regionName = effectiveRegionId === 'region_2' ? regionalRates.region2.name : regionalRates.region1.name;
+    const rateConfig = getRateForRegionAndGrade(regionalRates, effectiveRegionId, officer.grade);
+
+    const baseRate = Number(activeOfficerRecord?.hourlyRate) || rateConfig.basicHourlyRate;
+    const benefitsRate = Number(activeOfficerRecord?.benefitsHourlyRate) || rateConfig.benefitsHourlyRate;
+    const totalRate = Number(activeOfficerRecord?.totalRateInclBenefits) || rateConfig.totalRateInclBenefits;
+    const billRate = Number(activeOfficerRecord?.clientBillingRate) || rateConfig.clientBillingRate;
+
     const liveTimesheet: TimesheetEntry = {
       id: `ts-${officer.empId || 'TKD'}-${now.toISOString().slice(0, 10)}-${timestampNow}`,
       officerId: targetOffId,
@@ -720,6 +761,8 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       officerName: officer.name,
       grade: officer.grade || 'Grade A',
       siteName: officer.currentSite || 'Provincial Office',
+      regionId: effectiveRegionId,
+      regionName,
       date: now.toISOString().slice(0, 10),
       dayOfWeek: dayName,
       isSunday,
@@ -737,8 +780,11 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       overtimeHours: 0.0,
       nightAllowanceHours: isNight ? 1.0 : 0.0,
       isNightAllowanceEligible: isNight,
-      hourlyRate: GRADE_RATES[officer.grade]?.baseHourly ?? 48.50,
-      clientBillingRate: GRADE_RATES[officer.grade]?.clientBilling ?? 115.00,
+      hourlyRate: baseRate,
+      benefitsHourlyRate: benefitsRate,
+      totalRateInclBenefits: totalRate,
+      benefitsAmount: 0.0,
+      clientBillingRate: billRate,
       status: 'VERIFIED'
     };
 
@@ -2733,6 +2779,45 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     showToast(`Timesheet recorded for ${entry.officerName}`);
   };
 
+  const updateRegionalRates = async (newMatrix: SectoralRatesMatrix) => {
+    setRegionalRates(newMatrix);
+    try {
+      localStorage.setItem('dutyon_regional_rates', JSON.stringify(newMatrix));
+    } catch (e) {}
+    await syncRegionalRatesToCloud(newMatrix).catch(console.error);
+    showToast('✓ Sectoral Determination wage rates & benefits updated across regions');
+  };
+
+  const updateTimesheetEntry = async (id: string, updates: Partial<TimesheetEntry>) => {
+    let updatedEntry: TimesheetEntry | null = null;
+    setTimesheets((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          const hours = updates.actualHours ?? t.actualHours;
+          const basicRate = updates.hourlyRate ?? t.hourlyRate;
+          const benefitsRate = updates.benefitsHourlyRate ?? (t.benefitsHourlyRate || 0);
+          const totalRate = updates.totalRateInclBenefits ?? (basicRate + benefitsRate);
+          const benefitsAmount = updates.benefitsAmount ?? Math.round(hours * benefitsRate * 100) / 100;
+
+          updatedEntry = {
+            ...t,
+            ...updates,
+            hourlyRate: basicRate,
+            benefitsHourlyRate: benefitsRate,
+            totalRateInclBenefits: totalRate,
+            benefitsAmount,
+          };
+          return updatedEntry;
+        }
+        return t;
+      })
+    );
+    if (updatedEntry) {
+      await syncTimesheetToCloud(updatedEntry).catch(console.error);
+      showToast('✓ Shift rate per hour & benefits updated');
+    }
+  };
+
   const recordCompletedShift = (details: {
     officerId: string;
     siteName: string;
@@ -2742,6 +2827,11 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     overtimeHours?: number;
     isSunday?: boolean;
     isPublicHoliday?: boolean;
+    regionId?: 'region_1' | 'region_2' | string;
+    hourlyRate?: number;
+    benefitsHourlyRate?: number;
+    totalRateInclBenefits?: number;
+    clientBillingRate?: number;
   }) => {
     const off = officersList.find((o) => o.id === details.officerId) || officersList[0];
     const shiftDate = details.date || new Date().toISOString().slice(0, 10);
@@ -2753,8 +2843,17 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const std = Number(details.standardHours) || 12.0;
     const ot = Number(details.overtimeHours) || 0.0;
     const totalActual = std + ot;
-    const baseRate = GRADE_RATES[off?.grade]?.baseHourly ?? 48.50;
-    const billRate = GRADE_RATES[off?.grade]?.clientBilling ?? 115.00;
+
+    const targetSite = sites.find((s) => s.name === (details.siteName || off?.currentSite));
+    const effectiveRegionId = details.regionId || off?.regionId || targetSite?.regionId || 'region_1';
+    const regionName = effectiveRegionId === 'region_2' ? regionalRates.region2.name : regionalRates.region1.name;
+    const rateConfig = getRateForRegionAndGrade(regionalRates, effectiveRegionId, off?.grade);
+
+    const baseRate = details.hourlyRate ?? (Number(off?.hourlyRate) || rateConfig.basicHourlyRate);
+    const benefitsRate = details.benefitsHourlyRate ?? (Number(off?.benefitsHourlyRate) || rateConfig.benefitsHourlyRate);
+    const totalRate = details.totalRateInclBenefits ?? (details.hourlyRate && details.benefitsHourlyRate ? details.hourlyRate + details.benefitsHourlyRate : (Number(off?.totalRateInclBenefits) || rateConfig.totalRateInclBenefits));
+    const billRate = details.clientBillingRate ?? (Number(off?.clientBillingRate) || rateConfig.clientBillingRate);
+    const benefitsAmount = Math.round(totalActual * benefitsRate * 100) / 100;
 
     const newTs: TimesheetEntry = {
       id: `ts-${off?.empId || 'TKD'}-${shiftDate}-${Date.now()}`,
@@ -2763,6 +2862,8 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       officerName: off?.name || 'Security Officer',
       grade: off?.grade || 'Grade A',
       siteName: details.siteName || off?.currentSite || 'Provincial Office',
+      regionId: effectiveRegionId,
+      regionName,
       date: shiftDate,
       dayOfWeek: dayName,
       isSunday,
@@ -2781,13 +2882,16 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       nightAllowanceHours: isNight ? std : 0,
       isNightAllowanceEligible: isNight,
       hourlyRate: baseRate,
+      benefitsHourlyRate: benefitsRate,
+      totalRateInclBenefits: totalRate,
+      benefitsAmount,
       clientBillingRate: billRate,
       status: 'VERIFIED'
     };
 
     setTimesheets((prev) => [newTs, ...prev.filter((t) => t.id !== newTs.id)]);
     syncTimesheetToCloud(newTs).catch(console.error);
-    showToast(`✓ Recorded ${totalActual}h verified shift for ${newTs.officerName}`);
+    showToast(`✓ Recorded ${totalActual}h verified shift for ${newTs.officerName} (R${totalRate.toFixed(2)}/hr incl. benefits)`);
   };
 
   const deleteTimesheet = (id: string) => {
@@ -2934,6 +3038,16 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const isSunday = now.getDay() === 0;
     const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
+    const offSite = sites.find((s) => s.name === site);
+    const effectiveRegionId = (targetOfficer as any)?.regionId || offSite?.regionId || 'region_1';
+    const regionName = effectiveRegionId === 'region_2' ? regionalRates.region2.name : regionalRates.region1.name;
+    const rateConfig = getRateForRegionAndGrade(regionalRates, effectiveRegionId, grade);
+
+    const baseRate = Number((targetOfficer as any)?.hourlyRate) || rateConfig.basicHourlyRate;
+    const benefitsRate = Number((targetOfficer as any)?.benefitsHourlyRate) || rateConfig.benefitsHourlyRate;
+    const totalRate = Number((targetOfficer as any)?.totalRateInclBenefits) || rateConfig.totalRateInclBenefits;
+    const billRate = Number((targetOfficer as any)?.clientBillingRate) || rateConfig.clientBillingRate;
+
     const liveTimesheet: TimesheetEntry = {
       id: `ts-${officerId}-${now.toISOString().slice(0, 10)}-${timestampNow}`,
       officerId,
@@ -2941,6 +3055,8 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       officerName: offName,
       grade,
       siteName: site,
+      regionId: effectiveRegionId,
+      regionName,
       date: now.toISOString().slice(0, 10),
       dayOfWeek: daysOfWeek[now.getDay()],
       isSunday,
@@ -2958,8 +3074,11 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       overtimeHours: 0.0,
       nightAllowanceHours: isNight ? 1.0 : 0.0,
       isNightAllowanceEligible: isNight,
-      hourlyRate: GRADE_RATES[grade]?.baseHourly ?? 48.50,
-      clientBillingRate: GRADE_RATES[grade]?.clientBilling ?? 115.00,
+      hourlyRate: baseRate,
+      benefitsHourlyRate: benefitsRate,
+      totalRateInclBenefits: totalRate,
+      benefitsAmount: 0.0,
+      clientBillingRate: billRate,
       status: 'VERIFIED'
     };
     setTimesheets((prev) => [liveTimesheet, ...prev]);
@@ -3390,6 +3509,16 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     });
 
+    // 12. Real-time Sectoral Regional Rates subscription
+    const unsubRegionalRates = subscribeToRegionalRates((cloudRates) => {
+      if (cloudRates && cloudRates.region1 && cloudRates.region2) {
+        setRegionalRates(cloudRates);
+        try {
+          localStorage.setItem('dutyon_regional_rates', JSON.stringify(cloudRates));
+        } catch (e) {}
+      }
+    });
+
     return () => {
       unsubOB();
       unsubInc();
@@ -3402,6 +3531,7 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       unsubOfficers();
       unsubTimesheets();
       unsubOfficerDocs();
+      unsubRegionalRates();
       unsubAuth();
     };
   }, []);
@@ -3409,6 +3539,9 @@ export const DutyOnProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   return (
     <DutyOnContext.Provider
       value={{
+        regionalRates,
+        updateRegionalRates,
+        updateTimesheetEntry,
         currentUser,
         currentUserProfile,
         isAuthModalOpen,

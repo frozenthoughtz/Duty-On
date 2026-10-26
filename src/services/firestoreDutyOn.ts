@@ -28,7 +28,8 @@ import {
   UserAuthProfile,
   SecurityRosterPlan,
   TimesheetEntry,
-  DocumentItem
+  DocumentItem,
+  SectoralRatesMatrix
 } from '../types/dutyon';
 import { TIKEDI_SITES, TIKEDI_OFFICERS } from '../data/tikediMasterData';
 
@@ -1005,6 +1006,55 @@ export function subscribeToOfficerDocuments(callback: (docs: DocumentItem[]) => 
       handleFirestoreError(error, OperationType.LIST, path);
     }
   );
+}
+
+// ---------------- SECTORAL DETERMINATION REGIONAL RATES SYNC ----------------
+export async function syncRegionalRatesToCloud(matrix: SectoralRatesMatrix): Promise<void> {
+  const path = 'payroll_settings/sectoral_rates';
+  try {
+    const data = removeUndefinedFields({
+      ...matrix,
+      updatedAt: new Date().toISOString()
+    });
+    await setDoc(doc(db, 'payroll_settings', 'sectoral_rates'), data, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export function subscribeToRegionalRates(
+  onUpdate: (matrix: SectoralRatesMatrix) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const path = 'payroll_settings/sectoral_rates';
+  try {
+    return onSnapshot(
+      doc(db, 'payroll_settings', 'sectoral_rates'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data() as SectoralRatesMatrix;
+          if (data && data.region1 && data.region2) {
+            onUpdate(data);
+          }
+        }
+      },
+      (error) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (
+          msg.includes('offline') ||
+          msg.includes('unavailable') ||
+          msg.includes('failed-precondition')
+        ) {
+          return;
+        }
+        if (onError) onError(error);
+        handleFirestoreError(error, OperationType.GET, path);
+      }
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return () => {};
+  }
 }
 
 

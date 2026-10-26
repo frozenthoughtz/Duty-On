@@ -5,6 +5,7 @@ import { MultiSiteItem, FleetVehicle, OfficerRecord } from '../types/dutyon';
 import { EditSiteModal } from './modals/EditSiteModal';
 import { EditFleetModal } from './modals/EditFleetModal';
 import { EditOfficerModal } from './modals/EditOfficerModal';
+import { SectoralRatesMatrixEditor } from './SectoralRatesMatrixEditor';
 
 export const AdminDataHubView: React.FC = () => {
   const {
@@ -29,7 +30,7 @@ export const AdminDataHubView: React.FC = () => {
     resetToRealLifeData
   } = useDutyOn();
 
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'sites' | 'fleet' | 'officers' | 'database'>('sites');
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'sites' | 'fleet' | 'officers' | 'rates' | 'database'>('sites');
   const [siteSearch, setSiteSearch] = useState('');
   const [fleetSearch, setFleetSearch] = useState('');
   const [officerSearch, setOfficerSearch] = useState('');
@@ -313,6 +314,18 @@ export const AdminDataHubView: React.FC = () => {
           >
             <span>👮</span>
             <span>Security Personnel ({officersList.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveAdminSubTab('rates')}
+            className={`px-4 py-2.5 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+              activeAdminSubTab === 'rates'
+                ? 'border-[#1FA6C9] text-[#3FC9E9]'
+                : 'border-transparent text-[#8598A8] hover:text-white'
+            }`}
+          >
+            <span>⚖️</span>
+            <span>Sectoral Rates &amp; Benefits (Region 1 &amp; 2)</span>
           </button>
 
           <button
@@ -838,7 +851,14 @@ export const AdminDataHubView: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 4: DATABASE PERSISTENCE & UTILITIES */}
+        {/* TAB 4: SECTORAL DETERMINATION REGIONAL RATES & BENEFITS */}
+        {activeAdminSubTab === 'rates' && (
+          <div className="space-y-4 max-w-5xl">
+            <SectoralRatesMatrixEditor inlineMode={true} />
+          </div>
+        )}
+
+        {/* TAB 5: DATABASE PERSISTENCE & UTILITIES */}
         {activeAdminSubTab === 'database' && (
           <div className="space-y-5 max-w-4xl">
             <div className="bg-[#0A1E33] border border-white/10 rounded-2xl p-5 shadow-xl space-y-4">

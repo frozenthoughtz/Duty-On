@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useDutyOn } from '../../context/DutyOnContext';
 import { OfficerRecord } from '../../types/dutyon';
+import { getRateForRegionAndGrade } from '../../utils/payrollSectoral';
+import { DecimalRateInput } from '../common/DecimalRateInput';
 
 interface Props {
   officer: OfficerRecord;
@@ -11,7 +13,7 @@ interface Props {
 const ALL_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export const EditOfficerModal: React.FC<Props> = ({ officer, onClose }) => {
-  const { sites, updateOfficer, deleteOfficer, showToast } = useDutyOn();
+  const { sites, updateOfficer, deleteOfficer, showToast, regionalRates } = useDutyOn();
 
   const [name, setName] = useState(officer.name);
   const [empId, setEmpId] = useState(officer.empId);
@@ -23,8 +25,13 @@ export const EditOfficerModal: React.FC<Props> = ({ officer, onClose }) => {
   const [currentPost, setCurrentPost] = useState(officer.currentPost);
   const [location, setLocation] = useState(officer.location || 'Gqeberha, Eastern Cape');
   
-  // Rates
+  // Sectoral Region & Rates - Supports exact decimals with cents
+  const [regionId, setRegionId] = useState<'region_1' | 'region_2'>((officer.regionId as any) || 'region_1');
   const [hourlyRate, setHourlyRate] = useState<number>(officer.hourlyRate || 36.50);
+  const [benefitsHourlyRate, setBenefitsHourlyRate] = useState<number>(officer.benefitsHourlyRate || 7.00);
+  const [totalRateInclBenefits, setTotalRateInclBenefits] = useState<number>(
+    officer.totalRateInclBenefits || (Number(officer.hourlyRate || 36.50) + Number(officer.benefitsHourlyRate || 7.00))
+  );
   const [clientBillingRate, setClientBillingRate] = useState<number>(officer.clientBillingRate || 82.00);
 
   // Availability
@@ -47,6 +54,37 @@ export const EditOfficerModal: React.FC<Props> = ({ officer, onClose }) => {
   const [firstAidCert, setFirstAidCert] = useState(officer.firstAidCert);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Auto-suggest rates when grade or region is changed
+  const handleGradeOrRegionChange = (newGrade: string, newRegion: 'region_1' | 'region_2') => {
+    setGrade(newGrade);
+    setRegionId(newRegion);
+    const defaults = getRateForRegionAndGrade(regionalRates, newRegion, newGrade);
+    setHourlyRate(defaults.basicHourlyRate);
+    setBenefitsHourlyRate(defaults.benefitsHourlyRate);
+    setTotalRateInclBenefits(defaults.totalRateInclBenefits);
+    setClientBillingRate(defaults.clientBillingRate);
+  };
+
+  const handleTotalRateChange = (newTotal: number) => {
+    setTotalRateInclBenefits(newTotal);
+    if (newTotal >= hourlyRate) {
+      setBenefitsHourlyRate(Math.round((newTotal - hourlyRate) * 100) / 100);
+    } else {
+      setHourlyRate(newTotal);
+      setBenefitsHourlyRate(0);
+    }
+  };
+
+  const handleBasicRateChange = (newBasic: number) => {
+    setHourlyRate(newBasic);
+    setTotalRateInclBenefits(Math.round((newBasic + benefitsHourlyRate) * 100) / 100);
+  };
+
+  const handleBenefitsRateChange = (newBenefits: number) => {
+    setBenefitsHourlyRate(newBenefits);
+    setTotalRateInclBenefits(Math.round((hourlyRate + newBenefits) * 100) / 100);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -81,8 +119,11 @@ export const EditOfficerModal: React.FC<Props> = ({ officer, onClose }) => {
       currentSite,
       currentPost: currentPost.trim(),
       location: location.trim(),
-      hourlyRate: Number(hourlyRate) || 36.50,
-      clientBillingRate: Number(clientBillingRate) || 82.00,
+      regionId,
+      hourlyRate: Number(hourlyRate) || 0,
+      benefitsHourlyRate: Number(benefitsHourlyRate) || 0,
+      totalRateInclBenefits: Number(totalRateInclBenefits) || (Number(hourlyRate) + Number(benefitsHourlyRate)),
+      clientBillingRate: Number(clientBillingRate) || 0,
       availableDays,
       shiftPreference,
       maxWeeklyHours: Number(maxWeeklyHours) || 48,
@@ -92,7 +133,7 @@ export const EditOfficerModal: React.FC<Props> = ({ officer, onClose }) => {
       firstAidCert
     });
 
-    showToast(`Officer ${name} profile and rates updated`);
+    showToast(`✓ Officer ${name} rates updated (R${(Number(totalRateInclBenefits) || Number(hourlyRate)).toFixed(2)}/hr incl. benefits)`);
     onClose();
   };
 
@@ -243,47 +284,98 @@ export const EditOfficerModal: React.FC<Props> = ({ officer, onClose }) => {
           {/* Hourly Rates & Sectoral Determination */}
           <div className="space-y-3 pt-3 border-t border-white/10">
             <div className="text-[11px] font-bold uppercase tracking-wider text-[#5BCB80] flex items-center justify-between">
-              <span>💰 Hourly Rates (ZAR)</span>
-              <span className="text-[10px] text-[#8598A8] font-normal">Connects to Roster &amp; Payroll</span>
+              <span>💰 Wage &amp; Billing Rates (ZAR)</span>
+              <span className="text-[10px] text-[#8598A8] font-normal">Sectoral Determination 6 · Decimals &amp; Cents Allowed</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* Region Selector Pills */}
+            <div className="bg-[#071726] p-2.5 rounded-xl border border-white/10 flex items-center justify-between gap-2">
+              <span className="text-[10.5px] uppercase font-bold text-[#8598A8]">Sectoral Region:</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleGradeOrRegionChange(grade, 'region_1')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    regionId === 'region_1'
+                      ? 'bg-[#1FA6C9] text-[#042430] shadow-sm'
+                      : 'bg-white/5 text-[#8598A8] hover:text-white'
+                  }`}
+                >
+                  Region 1 (Area 1 - Metro)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleGradeOrRegionChange(grade, 'region_2')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    regionId === 'region_2'
+                      ? 'bg-emerald-500 text-[#042430] shadow-sm'
+                      : 'bg-white/5 text-[#8598A8] hover:text-white'
+                  }`}
+                >
+                  Region 2 (Area 2 - Non-Metro)
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+              {/* 1. Base Wage Rate */}
               <div className="bg-[#071726] p-3 rounded-xl border border-white/10">
-                <label className="text-[10.5px] text-[#8598A8] uppercase tracking-wider block mb-1">
-                  Guard Base Wage Rate (R/hr)
+                <label className="text-[10.5px] text-[#8598A8] uppercase tracking-wider block mb-1 font-semibold">
+                  Base Wage (R/hr)
                 </label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white">R</span>
-                  <input
-                    type="number"
-                    step="0.50"
-                    min="20"
-                    required
-                    value={hourlyRate}
-                    onChange={(e) => setHourlyRate(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-transparent border-b border-white/20 pb-1 text-base font-bold text-[#5BCB80] focus:outline-none focus:border-[#5BCB80]"
-                  />
-                </div>
-                <div className="text-[10px] text-[#8598A8] mt-1">Paid to guard for standard hours</div>
+                <DecimalRateInput
+                  value={hourlyRate}
+                  onChange={handleBasicRateChange}
+                  className="border-b border-white/20 pb-1 font-bold"
+                  inputClassName="text-base font-bold text-[#5BCB80] focus:text-[#5BCB80]"
+                  placeholder="33.66"
+                />
+                <div className="text-[9.5px] text-[#8598A8] mt-1">Basic hourly wage</div>
               </div>
 
+              {/* 2. Benefits Rate */}
               <div className="bg-[#071726] p-3 rounded-xl border border-white/10">
-                <label className="text-[10.5px] text-[#8598A8] uppercase tracking-wider block mb-1">
-                  Client Contract Billing (R/hr)
+                <label className="text-[10.5px] text-[#8598A8] uppercase tracking-wider block mb-1 font-semibold">
+                  Benefits (R/hr)
                 </label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white">R</span>
-                  <input
-                    type="number"
-                    step="1.00"
-                    min="30"
-                    required
-                    value={clientBillingRate}
-                    onChange={(e) => setClientBillingRate(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-transparent border-b border-white/20 pb-1 text-base font-bold text-[#3FC9E9] focus:outline-none focus:border-[#3FC9E9]"
-                  />
-                </div>
-                <div className="text-[10px] text-[#8598A8] mt-1">Billed to client in timesheets</div>
+                <DecimalRateInput
+                  value={benefitsHourlyRate}
+                  onChange={handleBenefitsRateChange}
+                  className="border-b border-white/20 pb-1 font-bold"
+                  inputClassName="text-base font-bold text-emerald-400 focus:text-emerald-400"
+                  placeholder="7.00"
+                />
+                <div className="text-[9.5px] text-[#8598A8] mt-1">Provident, Medical, UIF</div>
+              </div>
+
+              {/* 3. Rate Incl Benefits */}
+              <div className="bg-emerald-950/40 p-3 rounded-xl border border-emerald-500/40">
+                <label className="text-[10.5px] text-emerald-300 uppercase tracking-wider block mb-1 font-bold">
+                  Rate Incl. Benefits ★
+                </label>
+                <DecimalRateInput
+                  value={totalRateInclBenefits}
+                  onChange={handleTotalRateChange}
+                  className="border-b border-emerald-400/40 pb-1 font-bold"
+                  inputClassName="text-base font-extrabold text-emerald-300 focus:text-emerald-300"
+                  placeholder="40.66"
+                />
+                <div className="text-[9.5px] text-emerald-400/80 mt-1">Manual all-inclusive rate</div>
+              </div>
+
+              {/* 4. Client Billing Tariff */}
+              <div className="bg-[#071726] p-3 rounded-xl border border-white/10">
+                <label className="text-[10.5px] text-[#8598A8] uppercase tracking-wider block mb-1 font-semibold">
+                  Client Tariff (R/hr)
+                </label>
+                <DecimalRateInput
+                  value={clientBillingRate}
+                  onChange={(val) => setClientBillingRate(Math.round(val * 100) / 100)}
+                  className="border-b border-white/20 pb-1 font-bold"
+                  inputClassName="text-base font-bold text-[#3FC9E9] focus:text-[#3FC9E9]"
+                  placeholder="82.00"
+                />
+                <div className="text-[9.5px] text-[#8598A8] mt-1">Contract client invoice</div>
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { TimesheetEntry, OfficerPayrollSummary, PayPeriodSummary } from '../types/dutyon';
+import { TimesheetEntry, OfficerPayrollSummary, PayPeriodSummary, SectoralRatesMatrix, RegionalGradeRate } from '../types/dutyon';
 
 // Sectoral Determination 6 & PSSBC standard baseline allowances (South Africa)
 export const SECTORAL_RULES = {
@@ -12,11 +12,174 @@ export const SECTORAL_RULES = {
   minimumRestPeriodHours: 12.0,
 };
 
+// Default Sectoral Determination Regional & Grade Rates Matrix
+// Region 1 (Area 1): Major Metropolitan areas (Gauteng, Cape Metropole, eThekwini, Nelson Mandela Bay)
+// Region 2 (Area 2): Other Municipal areas, Non-Metro, Rural and Regional Inland Districts
+export const DEFAULT_SECTORAL_RATES_MATRIX: SectoralRatesMatrix = {
+  region1: {
+    id: 'region_1',
+    name: 'Region 1 (Area 1 - Metropolitan / Urban)',
+    areaDescription: 'Major Metros & Coastal Economic Centers (Gauteng, Cape Metropole, eThekwini, Nelson Mandela Bay)',
+    rates: {
+      'Grade A': {
+        grade: 'Grade A',
+        basicHourlyRate: 48.50,
+        benefitsHourlyRate: 9.20,
+        totalRateInclBenefits: 57.70,
+        clientBillingRate: 115.00,
+        providentFundRate: 3.64,
+        medicalAllowance: 3.50,
+        uniformAllowance: 2.06,
+        notes: 'Senior Site Commander / Armed Supervisor baseline'
+      },
+      'Grade B': {
+        grade: 'Grade B',
+        basicHourlyRate: 42.00,
+        benefitsHourlyRate: 8.00,
+        totalRateInclBenefits: 50.00,
+        clientBillingRate: 95.00,
+        providentFundRate: 3.15,
+        medicalAllowance: 3.00,
+        uniformAllowance: 1.85,
+        notes: 'Shift Supervisor / Access Control In-Charge'
+      },
+      'Grade C': {
+        grade: 'Grade C',
+        basicHourlyRate: 36.50,
+        benefitsHourlyRate: 7.00,
+        totalRateInclBenefits: 43.50,
+        clientBillingRate: 80.00,
+        providentFundRate: 2.74,
+        medicalAllowance: 2.50,
+        uniformAllowance: 1.76,
+        notes: 'Patrol Officer / Static Security Sentry'
+      },
+      'Grade D': {
+        grade: 'Grade D',
+        basicHourlyRate: 32.00,
+        benefitsHourlyRate: 6.10,
+        totalRateInclBenefits: 38.10,
+        clientBillingRate: 68.00,
+        providentFundRate: 2.40,
+        medicalAllowance: 2.20,
+        uniformAllowance: 1.50,
+        notes: 'Entry-level Access Gate Assistant'
+      },
+      'Armed Response': {
+        grade: 'Armed Response',
+        basicHourlyRate: 52.00,
+        benefitsHourlyRate: 10.50,
+        totalRateInclBenefits: 62.50,
+        clientBillingRate: 125.00,
+        providentFundRate: 3.90,
+        medicalAllowance: 4.20,
+        uniformAllowance: 2.40,
+        notes: 'Tactical Armed Interceptor & Tactical Patrol'
+      }
+    }
+  },
+  region2: {
+    id: 'region_2',
+    name: 'Region 2 (Area 2 - Non-Metropolitan / Rural)',
+    areaDescription: 'Other Municipal Areas, Inland Rural, Agricultural & Provincial Districts',
+    rates: {
+      'Grade A': {
+        grade: 'Grade A',
+        basicHourlyRate: 43.50,
+        benefitsHourlyRate: 8.30,
+        totalRateInclBenefits: 51.80,
+        clientBillingRate: 102.00,
+        providentFundRate: 3.26,
+        medicalAllowance: 3.10,
+        uniformAllowance: 1.94,
+        notes: 'Area 2 Senior Site Commander / Supervisor'
+      },
+      'Grade B': {
+        grade: 'Grade B',
+        basicHourlyRate: 37.50,
+        benefitsHourlyRate: 7.10,
+        totalRateInclBenefits: 44.60,
+        clientBillingRate: 85.00,
+        providentFundRate: 2.81,
+        medicalAllowance: 2.65,
+        uniformAllowance: 1.64,
+        notes: 'Area 2 Shift Supervisor / Access Lead'
+      },
+      'Grade C': {
+        grade: 'Grade C',
+        basicHourlyRate: 33.00,
+        benefitsHourlyRate: 6.30,
+        totalRateInclBenefits: 39.30,
+        clientBillingRate: 72.00,
+        providentFundRate: 2.48,
+        medicalAllowance: 2.30,
+        uniformAllowance: 1.52,
+        notes: 'Area 2 Standard Patrol Officer'
+      },
+      'Grade D': {
+        grade: 'Grade D',
+        basicHourlyRate: 29.50,
+        benefitsHourlyRate: 5.60,
+        totalRateInclBenefits: 35.10,
+        clientBillingRate: 62.00,
+        providentFundRate: 2.21,
+        medicalAllowance: 2.00,
+        uniformAllowance: 1.39,
+        notes: 'Area 2 Gate / Access Assistant'
+      },
+      'Armed Response': {
+        grade: 'Armed Response',
+        basicHourlyRate: 47.00,
+        benefitsHourlyRate: 9.50,
+        totalRateInclBenefits: 56.50,
+        clientBillingRate: 112.00,
+        providentFundRate: 3.53,
+        medicalAllowance: 3.70,
+        uniformAllowance: 2.27,
+        notes: 'Area 2 Tactical Armed Officer'
+      }
+    }
+  }
+};
+
+// Normalizes arbitrary grade text to standard Grade keys
+export function normalizeGradeKey(grade?: string): string {
+  if (!grade) return 'Grade C';
+  const g = grade.toUpperCase();
+  if (g.includes('ARMED') || g.includes('RESPONSE') || g.includes('TACTICAL')) return 'Armed Response';
+  if (g.includes('GRADE A') || g === 'A' || g.includes('DIRECTOR') || g.includes('OPS IN-CHARGE')) return 'Grade A';
+  if (g.includes('GRADE B') || g === 'B') return 'Grade B';
+  if (g.includes('GRADE D') || g === 'D') return 'Grade D';
+  return 'Grade C';
+}
+
+// Retrieve rate structure for a specific region and grade from the matrix
+export function getRateForRegionAndGrade(
+  matrix: SectoralRatesMatrix,
+  regionId?: string,
+  grade?: string
+): RegionalGradeRate {
+  const normGrade = normalizeGradeKey(grade);
+  const targetRegion = (regionId === 'region_2') ? matrix?.region2 : matrix?.region1;
+  const rates = targetRegion?.rates || DEFAULT_SECTORAL_RATES_MATRIX.region1.rates;
+  
+  if (rates[normGrade]) {
+    return rates[normGrade];
+  }
+  // Fallback lookup
+  return DEFAULT_SECTORAL_RATES_MATRIX.region1.rates['Grade C'];
+}
+
+// Legacy GRADE_RATES mapping for backwards compatibility
 export const GRADE_RATES: Record<string, { baseHourly: number; clientBilling: number }> = {
   'A': { baseHourly: 48.50, clientBilling: 115.00 },
+  'Grade A': { baseHourly: 48.50, clientBilling: 115.00 },
   'B': { baseHourly: 42.00, clientBilling: 95.00 },
+  'Grade B': { baseHourly: 42.00, clientBilling: 95.00 },
   'C': { baseHourly: 36.50, clientBilling: 80.00 },
+  'Grade C': { baseHourly: 36.50, clientBilling: 80.00 },
   'D': { baseHourly: 32.00, clientBilling: 68.00 },
+  'Grade D': { baseHourly: 32.00, clientBilling: 68.00 },
   'Armed Response': { baseHourly: 52.00, clientBilling: 125.00 },
 };
 
@@ -39,19 +202,43 @@ export function generatePayPeriodTimesheets(enrolledOfficers?: any[], options?: 
 // Optional generator to seed demonstration shifts when requested explicitly
 export function generateDemonstrationTimesheets(enrolledOfficers?: any[]): TimesheetEntry[] {
   const defaultOfficers = [
-    { id: 'off-admin', empId: 'DIR-0001', name: 'Tshepo Maloa', grade: 'Grade A', site: 'Provincial Office', baseRate: 48.50, billRate: 115.00 },
+    { 
+      id: 'off-admin', 
+      empId: 'DIR-0001', 
+      name: 'Tshepo Maloa', 
+      grade: 'Grade A', 
+      site: 'Provincial Office', 
+      regionId: 'region_1',
+      baseRate: 48.50, 
+      benefitsRate: 9.20,
+      totalRate: 57.70,
+      billRate: 115.00 
+    },
   ];
 
   const officers = (enrolledOfficers && enrolledOfficers.length > 0)
-    ? enrolledOfficers.map((o, idx) => ({
-        id: o.id || `off-enr-${idx}`,
-        empId: o.empId || `TKD-${1100 + idx}`,
-        name: o.name,
-        grade: o.grade || 'Grade C',
-        site: o.currentSite || 'Provincial Office',
-        baseRate: Number(o.baseHourlyRate) || (GRADE_RATES[o.grade]?.baseHourly ?? 36.50),
-        billRate: Number(o.clientBillingRate) || (GRADE_RATES[o.grade]?.clientBilling ?? 80.00),
-      }))
+    ? enrolledOfficers.map((o, idx) => {
+        const gradeKey = normalizeGradeKey(o.grade);
+        const regionId = o.regionId || (idx % 2 === 0 ? 'region_1' : 'region_2');
+        const defaultRate = getRateForRegionAndGrade(DEFAULT_SECTORAL_RATES_MATRIX, regionId, gradeKey);
+        const baseRate = Number(o.hourlyRate) || Number(o.baseHourlyRate) || defaultRate.basicHourlyRate;
+        const benefitsRate = Number(o.benefitsHourlyRate) || defaultRate.benefitsHourlyRate;
+        const totalRate = Number(o.totalRateInclBenefits) || (baseRate + benefitsRate);
+        const billRate = Number(o.clientBillingRate) || defaultRate.clientBillingRate;
+
+        return {
+          id: o.id || `off-enr-${idx}`,
+          empId: o.empId || `TKD-${1100 + idx}`,
+          name: o.name,
+          grade: o.grade || 'Grade C',
+          site: o.currentSite || 'Provincial Office',
+          regionId,
+          baseRate,
+          benefitsRate,
+          totalRate,
+          billRate,
+        };
+      })
     : defaultOfficers;
 
   const timesheets: TimesheetEntry[] = [];
@@ -105,6 +292,9 @@ export function generateDemonstrationTimesheets(enrolledOfficers?: any[]): Times
         ? 'Relief officer delayed 35 mins on N2 corridor; authorized handover' 
         : undefined;
 
+      const regionName = off.regionId === 'region_2' ? 'Region 2 (Area 2)' : 'Region 1 (Area 1)';
+      const benefitsAmount = Math.round(actualHours * off.benefitsRate * 100) / 100;
+
       timesheets.push({
         id: `ts-${off.empId}-${dateStr}`,
         officerId: off.id,
@@ -112,6 +302,8 @@ export function generateDemonstrationTimesheets(enrolledOfficers?: any[]): Times
         officerName: off.name,
         grade: off.grade,
         siteName: off.site,
+        regionId: off.regionId,
+        regionName,
         date: dateStr,
         dayOfWeek: dayName,
         isSunday,
@@ -131,6 +323,9 @@ export function generateDemonstrationTimesheets(enrolledOfficers?: any[]): Times
         nightAllowanceHours,
         isNightAllowanceEligible: isNightEligible,
         hourlyRate: off.baseRate,
+        benefitsHourlyRate: off.benefitsRate,
+        totalRateInclBenefits: off.totalRate,
+        benefitsAmount,
         clientBillingRate: off.billRate,
         status,
         varianceReason,
@@ -153,6 +348,8 @@ export function calculateOfficerPayrollSummaries(timesheets: TimesheetEntry[]): 
         name: ts.officerName,
         grade: ts.grade,
         siteName: ts.siteName,
+        regionId: ts.regionId,
+        regionName: ts.regionName,
         psiraNumber: `PSIRA-2489${ts.empId.slice(-3)}`,
         totalStandardHours: 0,
         totalActualHours: 0,
@@ -162,6 +359,9 @@ export function calculateOfficerPayrollSummaries(timesheets: TimesheetEntry[]): 
         publicHolidayHours: 0,
         nightShiftAllowanceShifts: 0,
         nightShiftAllowanceAmount: 0,
+        totalBasicWages: 0,
+        totalBenefitsAmount: 0,
+        averageRateInclBenefits: 0,
         grossWages: 0,
         clientBilledAmount: 0,
         profitMarginAmount: 0,
@@ -203,7 +403,19 @@ export function calculateOfficerPayrollSummaries(timesheets: TimesheetEntry[]): 
     // Night shift allowance
     const nightAllowance = ts.isNightAllowanceEligible ? SECTORAL_RULES.nightShiftAllowancePerShift : 0;
 
-    const shiftWage = basePay + otPay + sundayPremium + holidayPremium + nightAllowance;
+    // Statutory Benefits (Provident Fund, Medical, Uniform, UIF)
+    const benefitsRate = ts.benefitsHourlyRate ?? (
+      ts.totalRateInclBenefits && ts.totalRateInclBenefits > ts.hourlyRate
+        ? (ts.totalRateInclBenefits - ts.hourlyRate)
+        : 0
+    );
+    const shiftBenefits = ts.benefitsAmount ?? (ts.actualHours * benefitsRate);
+
+    const shiftBaseGross = basePay + otPay + sundayPremium + holidayPremium + nightAllowance;
+    o.totalBasicWages = (o.totalBasicWages || 0) + shiftBaseGross;
+    o.totalBenefitsAmount = (o.totalBenefitsAmount || 0) + shiftBenefits;
+
+    const shiftWage = shiftBaseGross + shiftBenefits;
     o.grossWages += shiftWage;
 
     // Client billed amount (Billed at contractual client hourly rate)
@@ -223,8 +435,13 @@ export function calculateOfficerPayrollSummaries(timesheets: TimesheetEntry[]): 
       : 0;
     // Round monetary values to 2 decimals
     o.grossWages = Math.round(o.grossWages * 100) / 100;
+    o.totalBasicWages = Math.round((o.totalBasicWages || 0) * 100) / 100;
+    o.totalBenefitsAmount = Math.round((o.totalBenefitsAmount || 0) * 100) / 100;
     o.clientBilledAmount = Math.round(o.clientBilledAmount * 100) / 100;
     o.profitMarginAmount = Math.round(o.profitMarginAmount * 100) / 100;
+    o.averageRateInclBenefits = o.totalActualHours > 0 
+      ? Math.round((o.grossWages / o.totalActualHours) * 100) / 100 
+      : 0;
     return o;
   });
 }
@@ -381,6 +598,7 @@ export function exportToSagePastelCSV(summaries: OfficerPayrollSummary[], payPer
     'EmpCode',
     'FullNames',
     'PSIRANumber',
+    'Region',
     'CostCentre_Site',
     'PSIRA_Grade',
     'NormalHours',
@@ -390,6 +608,8 @@ export function exportToSagePastelCSV(summaries: OfficerPayrollSummary[], payPer
     'NightAllowanceShifts',
     'NightAllowanceRate',
     'NightAllowanceTotal',
+    'BasicWages_ZAR',
+    'StatutoryBenefits_ZAR',
     'GrossWages_ZAR',
     'BilledClient_ZAR',
     'BiometricVerifiedShifts',
@@ -400,6 +620,7 @@ export function exportToSagePastelCSV(summaries: OfficerPayrollSummary[], payPer
     `"${s.empId}"`,
     `"${s.name}"`,
     `"${s.psiraNumber}"`,
+    `"${s.regionName || (s.regionId === 'region_2' ? 'Region 2 (Area 2)' : 'Region 1 (Area 1)')}"`,
     `"${s.siteName}"`,
     `"${s.grade}"`,
     s.totalStandardHours.toFixed(1),
@@ -409,6 +630,8 @@ export function exportToSagePastelCSV(summaries: OfficerPayrollSummary[], payPer
     s.nightShiftAllowanceShifts,
     SECTORAL_RULES.nightShiftAllowancePerShift.toFixed(2),
     s.nightShiftAllowanceAmount.toFixed(2),
+    (s.totalBasicWages || s.grossWages).toFixed(2),
+    (s.totalBenefitsAmount || 0).toFixed(2),
     s.grossWages.toFixed(2),
     s.clientBilledAmount.toFixed(2),
     `${s.biometricVerifiedShifts}/${s.totalShifts}`,
@@ -425,12 +648,15 @@ export function exportToVIPPayrollCSV(summaries: OfficerPayrollSummary[], payPer
     'EmployeeNumber',
     'PSIRAReg',
     'LastName_First',
+    'Region_Area',
     'CostCentre',
     'Normal_Rate_Hrs',
     'Overtime_Rate_1_5',
     'Sunday_Rate_1_5',
     'Public_Holiday_2_0',
     'NightShift_Count',
+    'Basic_Wages',
+    'Statutory_Benefits',
     'Total_Gross_Remuneration',
     'BiometricCompliance'
   ];
@@ -439,12 +665,15 @@ export function exportToVIPPayrollCSV(summaries: OfficerPayrollSummary[], payPer
     `"${s.empId}"`,
     `"${s.psiraNumber}"`,
     `"${s.name}"`,
+    `"${s.regionName || (s.regionId === 'region_2' ? 'Region 2' : 'Region 1')}"`,
     `"${s.siteName}"`,
     s.totalStandardHours.toFixed(1),
     s.totalOvertimeHours.toFixed(1),
     s.sundayHours.toFixed(1),
     s.publicHolidayHours.toFixed(1),
     s.nightShiftAllowanceShifts,
+    (s.totalBasicWages || s.grossWages).toFixed(2),
+    (s.totalBenefitsAmount || 0).toFixed(2),
     s.grossWages.toFixed(2),
     `"VERIFIED_FACE_AI"`
   ]);
@@ -463,6 +692,9 @@ export function exportToXeroTimesheetCSV(timesheets: TimesheetEntry[], payPeriod
     'Hours',
     'TrackingCategory1_Site',
     'TrackingCategory2_Grade',
+    'TrackingCategory3_Region',
+    'Benefits_PerHour',
+    'Rate_Incl_Benefits',
     'BiometricAuth',
     'Notes'
   ];
@@ -481,6 +713,9 @@ export function exportToXeroTimesheetCSV(timesheets: TimesheetEntry[], payPeriod
     ts.actualHours.toFixed(2),
     `"${ts.siteName}"`,
     `"${ts.grade}"`,
+    `"${ts.regionName || (ts.regionId === 'region_2' ? 'Region 2 (Area 2)' : 'Region 1 (Area 1)')}"`,
+    `R${(ts.benefitsHourlyRate || 0).toFixed(2)}`,
+    `R${(ts.totalRateInclBenefits || ts.hourlyRate).toFixed(2)}`,
     `"${ts.biometricMethod} (100% OK)"`,
     `"${ts.varianceReason || 'Scheduled 12h rotation'}"`
   ]);
@@ -496,6 +731,7 @@ export function exportDetailedAuditCSV(timesheets: TimesheetEntry[], payPeriod: 
     'EmpID',
     'OfficerName',
     'Grade',
+    'Region',
     'SiteName',
     'Date',
     'Day',
@@ -511,7 +747,10 @@ export function exportDetailedAuditCSV(timesheets: TimesheetEntry[], payPeriod: 
     'IsSunday',
     'IsPublicHoliday',
     'NightAllowanceEligible',
-    'GuardHourlyWage',
+    'BasicHourlyWage',
+    'BenefitsHourlyRate',
+    'TotalRateInclBenefits',
+    'TotalShiftBenefits',
     'ClientBillingRate',
     'EstimatedWageCost',
     'ClientBilledRevenue',
@@ -520,11 +759,18 @@ export function exportDetailedAuditCSV(timesheets: TimesheetEntry[], payPeriod: 
   ];
 
   const rows = timesheets.map((ts) => {
+    const benefitsRate = ts.benefitsHourlyRate ?? (
+      ts.totalRateInclBenefits && ts.totalRateInclBenefits > ts.hourlyRate
+        ? (ts.totalRateInclBenefits - ts.hourlyRate)
+        : 0
+    );
+    const shiftBenefits = ts.benefitsAmount ?? (ts.actualHours * benefitsRate);
     const wageCost = (ts.standardHours * ts.hourlyRate) + 
       (ts.overtimeHours * ts.hourlyRate * 1.5) +
       (ts.isSunday ? ts.actualHours * ts.hourlyRate * 0.5 : 0) +
       (ts.isPublicHoliday ? ts.actualHours * ts.hourlyRate * 1.0 : 0) +
-      (ts.isNightAllowanceEligible ? SECTORAL_RULES.nightShiftAllowancePerShift : 0);
+      (ts.isNightAllowanceEligible ? SECTORAL_RULES.nightShiftAllowancePerShift : 0) +
+      shiftBenefits;
 
     const clientRev = ts.billableHours * ts.clientBillingRate * (ts.isPublicHoliday ? 1.5 : (ts.isSunday ? 1.25 : 1.0));
     const margin = clientRev - wageCost;
@@ -534,6 +780,7 @@ export function exportDetailedAuditCSV(timesheets: TimesheetEntry[], payPeriod: 
       `"${ts.empId}"`,
       `"${ts.officerName}"`,
       `"${ts.grade}"`,
+      `"${ts.regionName || (ts.regionId === 'region_2' ? 'Region 2 (Area 2)' : 'Region 1 (Area 1)')}"`,
       `"${ts.siteName}"`,
       `"${ts.date}"`,
       `"${ts.dayOfWeek}"`,
@@ -550,6 +797,9 @@ export function exportDetailedAuditCSV(timesheets: TimesheetEntry[], payPeriod: 
       ts.isPublicHoliday ? `YES (${ts.publicHolidayName})` : 'NO',
       ts.isNightAllowanceEligible ? 'YES' : 'NO',
       `R${ts.hourlyRate.toFixed(2)}`,
+      `R${benefitsRate.toFixed(2)}`,
+      `R${(ts.totalRateInclBenefits || (ts.hourlyRate + benefitsRate)).toFixed(2)}`,
+      `R${shiftBenefits.toFixed(2)}`,
       `R${ts.clientBillingRate.toFixed(2)}`,
       `R${wageCost.toFixed(2)}`,
       `R${clientRev.toFixed(2)}`,

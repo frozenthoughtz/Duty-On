@@ -358,6 +358,7 @@ export interface MultiSiteItem {
   posts?: SitePost[];
   files?: SiteFile[];
   notes?: string;
+  regionId?: 'region_1' | 'region_2' | string;
   createdAt?: string;
 }
 
@@ -400,7 +401,10 @@ export interface OfficerRecord {
   avatarInitial: string;
   documents: DocumentItem[];
   hourlyRate?: number; // Base wage rate in ZAR (R/hr)
+  benefitsHourlyRate?: number; // Statutory benefits rate in ZAR (R/hr)
+  totalRateInclBenefits?: number; // Wage rate per hour including benefits (R/hr)
   clientBillingRate?: number; // Client billing rate in ZAR (R/hr)
+  regionId?: 'region_1' | 'region_2' | string;
   location?: string; // Home suburb or residential district
   coords?: { lat: number; lng: number };
   siteDeployed?: string;
@@ -490,17 +494,17 @@ export interface UserAuthProfile {
   createdAt?: string;
 }
 
-export type ShiftCode = 'D' | 'N' | 'OFF' | 'LEAVE' | '';
+export type ShiftCode = 'D' | 'N' | 'OFF' | 'LEAVE' | 'O' | 'L' | '';
 
 export interface GuardRosterEntry {
-  id: string;
+  id: string | number;
   name: string;
-  psiraNumber: string;
+  psiraNumber?: string;
   grade: string;
   empId?: string;
   phone?: string;
   assignedSite?: string;
-  shifts: Record<number, ShiftCode>;
+  shifts: Record<string, ShiftCode | string>;
 }
 
 export interface SecurityRosterPlan {
@@ -522,6 +526,32 @@ export interface SecurityRosterPlan {
   updatedAt: string;
 }
 
+export interface RegionalGradeRate {
+  grade: string;
+  basicHourlyRate: number; // Base wage rate in ZAR (R/hr)
+  benefitsHourlyRate: number; // Benefits rate in ZAR (R/hr) e.g. Provident Fund, Medical, Uniform, UIF
+  totalRateInclBenefits: number; // Total wage rate per hour including benefits (R/hr)
+  clientBillingRate: number; // Client tariff rate in ZAR (R/hr)
+  providentFundRate?: number;
+  medicalAllowance?: number;
+  uniformAllowance?: number;
+  notes?: string;
+}
+
+export interface SectoralRegionConfig {
+  id: 'region_1' | 'region_2' | string;
+  name: string; // e.g. "Region 1 (Area 1 - Metropolitan / Urban)"
+  areaDescription: string;
+  rates: Record<string, RegionalGradeRate>;
+}
+
+export interface SectoralRatesMatrix {
+  region1: SectoralRegionConfig;
+  region2: SectoralRegionConfig;
+  lastUpdated?: string;
+  updatedBy?: string;
+}
+
 export interface TimesheetEntry {
   id: string;
   officerId: string;
@@ -529,6 +559,8 @@ export interface TimesheetEntry {
   officerName: string;
   grade: string;
   siteName: string;
+  regionId?: 'region_1' | 'region_2' | string;
+  regionName?: string;
   date: string; // YYYY-MM-DD
   dayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
   isSunday: boolean;
@@ -548,6 +580,9 @@ export interface TimesheetEntry {
   nightAllowanceHours: number; // hours between 18:00 and 06:00
   isNightAllowanceEligible: boolean;
   hourlyRate: number; // Base rate in ZAR (e.g. R34.50 - R52.00)
+  benefitsHourlyRate?: number; // Benefits rate in ZAR (e.g. R6.50 - R10.50/hr)
+  totalRateInclBenefits?: number; // All-inclusive rate per hour (e.g. R41.00 - R62.50/hr)
+  benefitsAmount?: number; // Total shift benefits in ZAR
   clientBillingRate: number; // Client hourly rate in ZAR (e.g. R75.00 - R120.00)
   status: 'VERIFIED' | 'FLAGGED' | 'ADJUSTED';
   varianceReason?: string;
@@ -559,6 +594,8 @@ export interface OfficerPayrollSummary {
   name: string;
   grade: string;
   siteName: string;
+  regionId?: string;
+  regionName?: string;
   psiraNumber: string;
   totalStandardHours: number;
   totalActualHours: number;
@@ -568,7 +605,10 @@ export interface OfficerPayrollSummary {
   publicHolidayHours: number;
   nightShiftAllowanceShifts: number;
   nightShiftAllowanceAmount: number; // Statutory rate in ZAR
-  grossWages: number; // Total guard earnings
+  totalBasicWages?: number; // Base wages before benefits
+  totalBenefitsAmount?: number; // Total statutory benefits (Provident, Medical, Uniform)
+  averageRateInclBenefits?: number; // Effective rate per hour including benefits
+  grossWages: number; // Total guard earnings (Basic + Overtime + Sunday + Holiday + Night + Benefits)
   clientBilledAmount: number; // Invoiced to client
   profitMarginAmount: number; // Billed - Wages
   profitMarginPercent: number; // Margin %
